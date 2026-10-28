@@ -52,8 +52,6 @@ python -m agentenv_api_workbench.optimize --mode api_design --iterations 2
 
 Run the command in the second PowerShell terminal after starting the server. Use `--mode api_documentation` to evaluate the documentation plugin. The optimizer reuses the Azure endpoint and key by default; `OPTIMIZER_MODEL`, `OPTIMIZER_API_KEY`, and `OPTIMIZER_AZURE_OPENAI_ENDPOINT` can override them. For classic Azure OpenAI, also set `AZURE_OPENAI_API_VERSION`; the optimizer can override it with `OPTIMIZER_AZURE_OPENAI_API_VERSION`. For non-Azure OpenAI-compatible services, set `OPENAI_BASE_URL` instead; `OPTIMIZER_BASE_URL` can override the optimizer endpoint.
 
-Optimization history, candidate prompts, and scores are written to `runs/api-workbench-optimizer.json`. A candidate replaces the current best only when its score improves on the same fixed task set.
-
 ## Environment API
 
 - `GET /tasks` lists the synthetic task IDs and modes.
@@ -64,6 +62,8 @@ Optimization history, candidate prompts, and scores are written to `runs/api-wor
 - `POST /close` with `{"id":0}` releases the session.
 
 Each task has named, weighted structural checks. Design checks look for declared request shapes, typed fields, guards, error/result types, and avoid untyped `any`; documentation checks look for separate route headings and required documentation sections. The score is a structural rubric, not a semantic quality score or a TypeScript compilation result. The endpoint extractor uses regex patterns, so it may miss unsupported or multiline route declarations. Tasks use fixture code only; arbitrary repository paths are not accepted.
+
+For each agent mode, fixture indices `0` and `1` are training tasks and index `2` is held out for validation. Optimizer candidates are accepted only when the held-out score improves. Each evaluation report records per-task scores and passed/failed rubric checks. The default state files are `runs/api_design-optimizer.json` and `runs/api_documentation-optimizer.json`; use `--state` to choose another path.
 
 ## Tests
 

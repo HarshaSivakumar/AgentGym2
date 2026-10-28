@@ -19,6 +19,9 @@ class OptimizationResult:
     best_prompt: str
     best_score: float
     history: tuple[dict[str, object], ...]
+    best_train_score: float
+    best_train_report: dict[str, object] | None
+    best_validation_report: dict[str, object] | None
 
 
 class PromptOptimizer:
@@ -31,6 +34,7 @@ class PromptOptimizer:
         score_prompt: ScorePrompt,
         proposer: Callable[[str, float, Sequence[dict[str, object]]], str],
         iterations: int,
+        validation_score_prompt: ScorePrompt | None = None,
     ) -> OptimizationResult:
         if iterations < 0:
             raise ValueError("iterations cannot be negative")
@@ -38,19 +42,29 @@ class PromptOptimizer:
             raise ValueError("initial_prompt cannot be empty")
 
         best_prompt = initial_prompt
-        best_score = self._score(score_prompt(best_prompt))
+        best_train_score, best_train_report = self._evaluate_prompt(score_prompt, best_prompt)
+        if validation_score_prompt is None:
+            best_validation_score, best_validation_report = best_train_score, best_train_report
+        else:
+            best_validation_score, best_validation_report = self._evaluate_prompt(
+                validation_score_prompt, best_prompt
+            )
         history: list[dict[str, object]] = [
             {
                 "iteration": 0,
-                "score": best_score,
+                "score": best_validation_score,
+                "train_score": best_train_score,
+                "validation_score": best_validation_score,
                 "accepted": True,
                 "prompt": best_prompt,
+                "train_report": best_train_report,
+                "validation_report": best_validation_report,
             }
         ]
         self._persist(history)
 
         for iteration in range(1, iterations + 1):
-            candidate = proposer(best_prompt, best_score, tuple(history)).strip()
+            candidate = proposer(best_prompt, best_train_score, tuple(history)).strip()
             if not candidate:
                 history.append(
                     {
@@ -63,22 +77,56 @@ class PromptOptimizer:
                 self._persist(history)
                 continue
 
-            candidate_score = self._score(score_prompt(candidate))
-            accepted = candidate_score > best_score
+            candidate_train_score, candidate_train_report = self._evaluate_prompt(
+                score_prompt, candidate
+            )
+            if validation_score_prompt is None:
+                candidate_validation_score = candidate_train_score
+                candidate_validation_report = candidate_train_report
+            else:
+                candidate_validation_score, candidate_validation_report = self._evaluate_prompt(
+                    validation_score_prompt, candidate
+                )
+            accepted = candidate_validation_score > best_validation_score
             history.append(
                 {
                     "iteration": iteration,
-                    "score": candidate_score,
+                    "score": candidate_validation_score,
+                    "train_score": candidate_train_score,
+                    "validation_score": candidate_validation_score,
                     "accepted": accepted,
                     "prompt": candidate,
+                    "train_report": candidate_train_report,
+                    "validation_report": candidate_validation_report,
                 }
             )
             if accepted:
                 best_prompt = candidate
-                best_score = candidate_score
+                best_train_score = candidate_train_score
+                best_train_report = candidate_train_report
+                best_validation_score = candidate_validation_score
+                best_validation_report = candidate_validation_report
             self._persist(history)
 
-        return OptimizationResult(best_prompt, best_score, tuple(history))
+        return OptimizationResult(
+            best_prompt=best_prompt,
+            best_score=best_validation_score,
+            history=tuple(history),
+            best_train_score=best_train_score,
+            best_train_report=best_train_report,
+            best_validation_report=best_validation_report,
+        )
+
+    def _evaluate_prompt(
+        self,
+        scorer: ScorePrompt,
+        prompt: str,
+    ) -> tuple[float, dict[str, object] | None]:
+        evaluate = getattr(scorer, "evaluate", None)
+        if callable(evaluate):
+            report = evaluate(prompt)
+            return self._score(report.score), report.to_dict()
+        return self._score(scorer(prompt)), None
 
     def _persist(self, history: list[dict[str, object]]) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)

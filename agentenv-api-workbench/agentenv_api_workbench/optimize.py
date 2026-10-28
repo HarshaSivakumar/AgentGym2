@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 from .config import load_environment
-from .evaluation import WorkbenchEvaluator
+from .evaluation import WorkbenchEvaluator, split_task_indices
+from .fixtures import DEFAULT_TASKS
 from .llm import OpenAIChatModel
 from .optimizer import PromptOptimizer, propose_prompt
 from .plugins import load_plugin_bundle
@@ -19,6 +20,12 @@ def _required_environment(*names: str) -> str:
             return value
     expected_names = " or ".join(names)
     raise SystemExit(f"Set {expected_names} in the environment or .env file")
+
+
+def resolve_state_path(state_arg: str | None, mode: str) -> Path:
+    workbench_root = Path(__file__).resolve().parents[1]
+    path = Path(state_arg) if state_arg else Path("runs") / f"{mode}-optimizer.json"
+    return path if path.is_absolute() else workbench_root / path
 
 
 def _create_model(api_key: str, model_name: str, temperature: float, optimizer: bool = False) -> OpenAIChatModel:
@@ -62,7 +69,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=("api_design", "api_documentation"), required=True)
     parser.add_argument("--iterations", type=int, default=2)
     parser.add_argument("--server", default="http://127.0.0.1:36011")
-    parser.add_argument("--state", default="runs/api-workbench-optimizer.json")
+    parser.add_argument("--state", default=None)
     args = parser.parse_args()
 
     if args.iterations < 0:
@@ -86,23 +93,44 @@ def main() -> None:
         optimizer=True,
     )
     initial_prompt = load_plugin_bundle(plugin_root, args.mode).prompt
-    evaluator = WorkbenchEvaluator(worker, args.server, args.mode, plugin_root)
-    optimizer = PromptOptimizer(Path(args.state))
+    task_count = sum(task.mode == args.mode for task in DEFAULT_TASKS)
+    training_indices, validation_indices = split_task_indices(task_count)
+    training_evaluator = WorkbenchEvaluator(
+        worker,
+        args.server,
+        args.mode,
+        plugin_root,
+        task_indices=training_indices,
+    )
+    validation_evaluator = WorkbenchEvaluator(
+        worker,
+        args.server,
+        args.mode,
+        plugin_root,
+        task_indices=validation_indices,
+    )
+    state_path = resolve_state_path(args.state, args.mode)
+    optimizer = PromptOptimizer(state_path)
     result = optimizer.run(
         initial_prompt=initial_prompt,
-        score_prompt=evaluator,
+        score_prompt=training_evaluator,
         proposer=lambda prompt, score, history: propose_prompt(
             optimizer_model, prompt, score, history
         ),
         iterations=args.iterations,
+        validation_score_prompt=validation_evaluator,
     )
     print(
         json.dumps(
             {
-                "best_score": result.best_score,
-                "best_prompt": result.best_prompt,
+                "best_training_score": result.best_train_score,
+                "best_validation_score": result.best_score,
+                "training_task_indices": list(training_indices),
+                "validation_task_indices": list(validation_indices),
+                "best_training_report": result.best_train_report,
+                "best_validation_report": result.best_validation_report,
                 "iterations": len(result.history) - 1,
-                "state_file": str(Path(args.state).resolve()),
+                "state_file": str(state_path.resolve()),
             },
             indent=2,
         )
