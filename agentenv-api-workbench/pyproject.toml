@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentgym-api-workbench"
+version = "0.1.0"
+description = "An AgentGym environment for API design and documentation tasks"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "requests>=2.31",
+    "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+llm = ["openai>=1.30"]
+
+[project.scripts]
+api-workbench = "agentenv_api_workbench.launch:main"
+api-workbench-optimize = "agentenv_api_workbench.optimize:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentenv_api_workbench*"]
