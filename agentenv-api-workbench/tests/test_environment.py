@@ -89,6 +89,41 @@ class ApiWorkbenchEnvironmentTests(unittest.TestCase):
             ["route heading", "description section", "error section"],
         )
 
+    def test_booking_route_rubric_accepts_plugin_markdown_headings(self) -> None:
+        from agentenv_api_workbench.fixtures import DEFAULT_TASKS
+
+        task = next(task for task in DEFAULT_TASKS if task.task_id == "document-booking-update-and-cancel")
+        environment = ApiWorkbenchEnvironment([task])
+        environment.reset(0)
+
+        result = environment.step(
+            "### `[PATCH]` `/bookings/:bookingId`\n"
+            "### `[DELETE]` `/bookings/:bookingId`"
+        )
+
+        self.assertIn("PATCH booking route", result["info"]["passed_checks"])
+        self.assertIn("DELETE booking route", result["info"]["passed_checks"])
+
+    def test_availability_rubric_accepts_named_query_and_date_alias(self) -> None:
+        from agentenv_api_workbench.fixtures import DEFAULT_TASKS
+
+        task = next(task for task in DEFAULT_TASKS if task.task_id == "design-search-availability")
+        environment = ApiWorkbenchEnvironment([task])
+        environment.reset(0)
+        response = (
+            "export type ISODateString = string;\n"
+            "export interface GetPropertyAvailabilityQueryParams {\n"
+            "  propertyId: string; checkIn: ISODateString; checkOut: ISODateString; guests: number;\n"
+            "}\n"
+            "export type AvailabilityResult = { available: boolean };\n"
+            "function validate(input: unknown) { if (!input) return false; return true; }"
+        )
+
+        result = environment.step(response)
+
+        self.assertEqual(result["reward"], 1.0)
+        self.assertEqual(result["info"]["failed_checks"], [])
+
     def test_step_requires_reset_and_rejects_steps_after_completion(self) -> None:
         task = WorkbenchTask(
             task_id="design-1",

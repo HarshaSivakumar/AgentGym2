@@ -1,4 +1,34 @@
+import re
+
 from .environment import RubricCheck, WorkbenchTask
+
+
+def _string_field_pattern(name: str) -> str:
+    field = rf"\b{re.escape(name)}\??\s*:\s*"
+    alias_value = r"(?:string|`(?:\\.|[^`\\])*`)[ \t]*(?:;|$)"
+    return (
+        rf"{field}string\b(?!\s*\[)"
+        rf"|\btype\s+(?P<string_alias>[A-Za-z_$][\w$]*)"
+        rf"\s*=\s*{alias_value}"
+        rf"[\s\S]*{field}(?P=string_alias)\b(?!\s*\[)"
+        rf"|{field}(?P<forward_alias>[A-Za-z_$][\w$]*)\b(?!\s*\[)"
+        rf"[\s\S]*\btype\s+(?P=forward_alias)\s*=\s*{alias_value}"
+    )
+
+
+def _booking_route_pattern(method: str) -> str:
+    return (
+        rf"^###[ \t]+[^\r\n]*\b{method}\b[^\r\n]*/bookings/"
+        rf"(?::bookingId|\{{bookingId\}})`?[ \t]*\r?$"
+    )
+
+
+def _booking_section_pattern(method: str, section: str) -> str:
+    # Do not let one route borrow sections from the next route's heading.
+    return (
+        _booking_route_pattern(method)
+        + rf"(?:(?!^#{{1,3}}[ \t])[\s\S])*?{section}"
+    )
 
 
 DEFAULT_TASKS = [
@@ -13,10 +43,10 @@ DEFAULT_TASKS = [
         ),
         rubric=(
             RubricCheck("request interface", r"\binterface\s+CreateBookingRequest\b", 2),
-            RubricCheck("typed guest field", r"guestId\s*:\s*string"),
-            RubricCheck("typed property field", r"propertyId\s*:\s*string"),
-            RubricCheck("check-in field", r"checkIn\s*:\s*string"),
-            RubricCheck("check-out field", r"checkOut\s*:\s*string"),
+            RubricCheck("typed guest field", _string_field_pattern("guestId")),
+            RubricCheck("typed property field", _string_field_pattern("propertyId")),
+            RubricCheck("check-in field", _string_field_pattern("checkIn")),
+            RubricCheck("check-out field", _string_field_pattern("checkOut")),
             RubricCheck("validation error", r"ValidationError"),
             RubricCheck("booking conflict error", r"ConflictError"),
             RubricCheck("guard clause", r"if\s*\("),
@@ -34,8 +64,8 @@ DEFAULT_TASKS = [
         ),
         rubric=(
             RubricCheck("request interface", r"\binterface\s+CancelBookingRequest\b", 2),
-            RubricCheck("booking identifier", r"bookingId\s*:\s*string"),
-            RubricCheck("cancellation reason", r"cancellationReason\??\s*:\s*string"),
+            RubricCheck("booking identifier", _string_field_pattern("bookingId")),
+            RubricCheck("cancellation reason", _string_field_pattern("cancellationReason")),
             RubricCheck("idempotency", r"idempotenc", weight=2),
             RubricCheck("checked-in conflict", r"checked.?in|already.?started|not.?cancellable"),
             RubricCheck("typed result", r"type\s+CancelBookingResult\s*=|interface\s+CancelBookingResult\b"),
@@ -53,10 +83,14 @@ DEFAULT_TASKS = [
             "an infrastructure error. Include typed errors and guarded skeleton logic."
         ),
         rubric=(
-            RubricCheck("query interface", r"\binterface\s+AvailabilityQuery\b", 2),
-            RubricCheck("property identifier", r"propertyId\s*:\s*string"),
-            RubricCheck("check-in query", r"checkIn\s*:\s*string"),
-            RubricCheck("check-out query", r"checkOut\s*:\s*string"),
+            RubricCheck(
+                "query interface",
+                r"\binterface\s+\w*(?:Query|Request|Params)\b|\btype\s+\w*(?:Query|Request|Params)\b",
+                2,
+            ),
+            RubricCheck("property identifier", _string_field_pattern("propertyId")),
+            RubricCheck("check-in query", _string_field_pattern("checkIn")),
+            RubricCheck("check-out query", _string_field_pattern("checkOut")),
             RubricCheck("guest count", r"guests\s*:\s*number"),
             RubricCheck("availability result", r"Availability(Result|Response)"),
             RubricCheck("validation guard", r"if\s*\("),
@@ -117,11 +151,25 @@ DEFAULT_TASKS = [
             "the successful response for each route."
         ),
         rubric=(
-            RubricCheck("PATCH booking route", r"(?m)^###\s+.*PATCH.*/bookings/[:{]bookingId[}/]", 2),
-            RubricCheck("DELETE booking route", r"(?m)^###\s+.*DELETE.*/bookings/[:{]bookingId[}/]", 2),
-            RubricCheck("description sections", r"(?i)\*\*Description:\*\*", 2),
-            RubricCheck("request sections", r"(?i)Request Payload\s*/\s*Params", 2),
-            RubricCheck("success response sections", r"(?i)Expected Response\s*\(Success\)", 2),
+            RubricCheck(
+                "PATCH booking route",
+                _booking_route_pattern("PATCH"),
+                2,
+            ),
+            RubricCheck(
+                "DELETE booking route",
+                _booking_route_pattern("DELETE"),
+                2,
+            ),
+            *(
+                RubricCheck(f"{method} {name}", _booking_section_pattern(method, pattern))
+                for method in ("PATCH", "DELETE")
+                for name, pattern in (
+                    ("description section", r"\*\*Description:\*\*"),
+                    ("request section", r"Request Payload\s*/\s*Params"),
+                    ("success response section", r"Expected Response\s*\(Success\)"),
+                )
+            ),
         ),
         source_code=(
             "app.patch('/bookings/:bookingId', updateBooking);\n"

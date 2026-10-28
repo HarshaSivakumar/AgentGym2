@@ -74,9 +74,13 @@ class WorkbenchEvaluatorTests(unittest.TestCase):
         self.assertEqual(report.score, 1.0)
         self.assertEqual(len(report.task_results), 1)
         self.assertEqual(report.task_results[0].task_id, "fixture-1")
+        self.assertEqual(report.task_results[0].response, "candidate output")
         self.assertEqual(report.task_results[0].passed_checks, ("check-1",))
         self.assertEqual(report.task_results[0].failed_checks, ("missing-section",))
         self.assertEqual(report.to_dict()["task_results"][0]["score"], 1.0)
+        self.assertEqual(
+            report.to_dict()["task_results"][0]["response"], "candidate output"
+        )
 
 
 class TaskSplitTests(unittest.TestCase):

@@ -63,7 +63,9 @@ Run the command in the second PowerShell terminal after starting the server. Use
 
 Each task has named, weighted structural checks. Design checks look for declared request shapes, typed fields, guards, error/result types, and avoid untyped `any`; documentation checks look for separate route headings and required documentation sections. The score is a structural rubric, not a semantic quality score or a TypeScript compilation result. The endpoint extractor uses regex patterns, so it may miss unsupported or multiline route declarations. Tasks use fixture code only; arbitrary repository paths are not accepted.
 
-For each agent mode, fixture indices `0` and `1` are training tasks and index `2` is held out for validation. Optimizer candidates are accepted only when the held-out score improves. Each evaluation report records per-task scores and passed/failed rubric checks. The default state files are `runs/api_design-optimizer.json` and `runs/api_documentation-optimizer.json`; use `--state` to choose another path.
+String-field checks accept either `string` or a directly declared string alias in the same response, such as `type BookingId = string`, including template-literal string aliases used for dates. Undeclared aliases and aliases to other types do not satisfy these checks; chained aliases and other complex TypeScript types are not resolved. The held-out PATCH/DELETE documentation fixture checks description, request, and success-response sections within each route separately, so a complete PATCH section cannot compensate for missing DELETE sections (or vice versa).
+
+For each agent mode, fixture indices `0` and `1` are training tasks and index `2` is held out for validation. Optimizer candidates are accepted only when the held-out score improves. Each evaluation report records the generated response, per-task score, and passed/failed rubric checks. The default state files are `runs/api_design-optimizer.json` and `runs/api_documentation-optimizer.json`; use `--state` to choose another path. The `.gitignore` keeps these run reports and `.env` local.
 
 ## Tests
 

@@ -15,6 +15,7 @@ class ChatModel(Protocol):
 class TaskEvaluation:
     task_id: str
     score: float
+    response: str
     passed_checks: tuple[str, ...]
     failed_checks: tuple[str, ...]
     matched_terms: tuple[str, ...]
@@ -82,6 +83,7 @@ class WorkbenchEvaluator:
                     TaskEvaluation(
                         task_id=str(initial.get("task_id", task_index)),
                         score=step_output.reward,
+                        response=response,
                         passed_checks=tuple(info.get("passed_checks", ())),
                         failed_checks=tuple(info.get("failed_checks", ())),
                         matched_terms=tuple(info.get("matched_terms", ())),
