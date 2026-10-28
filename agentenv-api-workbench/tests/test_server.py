@@ -17,7 +17,14 @@ class ApiWorkbenchManagerTests(unittest.TestCase):
 
         result = manager.step(
             docs_session["id"],
-            "GET /health POST /bookings Request Payload / Params Expected Response (Success)",
+            "### `GET` `/health`\n"
+            "**Description:** Health status.\n"
+            "**Request Payload / Params:** None\n"
+            "**Expected Response (Success):** `{}`\n\n"
+            "### `POST` `/bookings`\n"
+            "**Description:** Create a booking.\n"
+            "**Request Payload / Params:** `{}`\n"
+            "**Expected Response (Success):** `{}`",
         )
         self.assertEqual(result["reward"], 1.0)
         self.assertTrue(result["done"])

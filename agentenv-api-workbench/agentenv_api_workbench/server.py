@@ -7,9 +7,13 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from .config import load_environment
 from .extractor import NodeEndpointExtractor
 from .fixtures import DEFAULT_TASKS
 from .manager import ApiWorkbenchManager
+
+
+load_environment()
 
 
 class CreateRequest(BaseModel):

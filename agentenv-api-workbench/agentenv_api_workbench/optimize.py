@@ -5,17 +5,20 @@ import json
 import os
 from pathlib import Path
 
+from .config import load_environment
 from .evaluation import WorkbenchEvaluator
 from .llm import OpenAIChatModel
 from .optimizer import PromptOptimizer, propose_prompt
 from .plugins import load_plugin_bundle
 
 
-def _required_environment(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise SystemExit(f"Set the {name} environment variable before running optimization")
-    return value
+def _required_environment(*names: str) -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    expected_names = " or ".join(names)
+    raise SystemExit(f"Set {expected_names} in the environment or .env file")
 
 
 def _create_model(api_key: str, model_name: str, temperature: float, optimizer: bool = False) -> OpenAIChatModel:
@@ -65,9 +68,10 @@ def main() -> None:
     if args.iterations < 0:
         raise SystemExit("--iterations cannot be negative")
 
+    load_environment()
     plugin_root = _required_environment("AGENTGYM_PLUGINS_ROOT")
-    api_key = _required_environment("OPENAI_API_KEY")
-    model_name = _required_environment("OPENAI_MODEL")
+    api_key = _required_environment("OPENAI_API_KEY", "AZURE_OPENAI_API_KEY")
+    model_name = _required_environment("OPENAI_MODEL", "AZURE_OPENAI_DEPLOYMENT")
     optimizer_model_name = os.environ.get("OPTIMIZER_MODEL", model_name)
 
     worker = _create_model(
